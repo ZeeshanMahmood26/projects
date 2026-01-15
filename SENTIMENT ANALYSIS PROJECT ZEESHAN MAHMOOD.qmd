@@ -1,0 +1,381 @@
+---
+title: "SENTIMENT ANALYSIS PROJECT ZEESHAN MAHMOOD"
+format:
+  html:
+    embed-resources: true
+---
+
+# [Sentiment Analysis on Reddit Comments After the End of the Federal EV Tax Credit, Using R]{.underline}
+
+## [Introduction]{.underline}
+
+Background: According to congress.gov, the Federal EV Tax Credit was introduced in 2008 by the Energy Improvement and Extension Act. The purpose of the EV tax credit was to entice new car buyers with a \$3,400 price reduction off the MSRP of a brand new electric/hybrid vehicle, making it much more affordable for buyers and in the process, popularize EV/hybrid vehicle adoption. In 2009, the Obama Administration improved it further by offering a \$7,500 discount off the original price of the vehicle. In 2022, with the help of The Inflation Reduction Act, used EVs/Hybrids were now offered with up to \$4,000 discount as well.
+
+However, in 2025 the Trump Administration passed a bill through Congress to end the EV tax credit on October 31, 2025 for various political and economical reasons. This change caused quite a stir in one of the most driving economic industries in the U.S., affecting sales and the future outlook of EVs/Hybrids in the automotive industry. There are many online platforms where people expressed their opinions regarding this news, with Reddit being particularly relevant to the conversation.
+
+## [Research Question]{.underline}
+
+What is the sentiment commonly shared by Reddit users regarding the end of the EV Federal Tax Credit on October 31st, 2025?
+
+## [Hypothesis]{.underline}
+
+The end of the EV Federal Tax Credit on October 31st, 2025 caused a negative sentiment from Reddit users.
+
+## [Data]{.underline}
+
+#### [Data Source:]{.underline}
+
+The entire data source for this project was extracted from [Reddit.com]{.underline} using the RedditExtractor tool in R.
+
+#### [Key Characteristics:]{.underline}
+
+The data set includes 1,069 rows and 11 columns. The time period covered is between 10-14-2025 and 11-12-2025 to include the most active time towards the discussion of the EV tax credit. Though my project was focused on dictionary based sentiment analysis and covariates were not factored in as a usual regression model project would do, here are some covariates that could be incorporated into a future project to better understand sentiment in EV Reddit discussions:
+
+-   Subreddit - Categorical, every community has different sentiment culture and perspectives.
+
+-   Comment Length - Longer comments are more expressive than shorter ones, causing a positive shift towards emotional expression.
+
+-   UpVotes & DownVotes - Greatly upvoted or downvoted comments express high emotions.
+
+-   Thread Topics - The stated tone or opinion of the OP's post could highly affect emotional response from Reddit replies.
+
+#### [Data Cleaning & Pre-Processing]{.underline}
+
+Pre-processing with RedditExtractor:
+
+{#install.packages("RedditExtractoR")} #install.packages("tidyverse") #install.packages("dplyr") #install.packages("purr") library(RedditExtractoR) library(tidyverse) library(dplyr) library(quanteda) library(quanteda.textplots)
+
+#First, lets start by using the “find_subreddits” function to locate all subreddits related to our term of interest, “EVs”.
+
+EV_Subreddits \<- find_subreddits("EVs, electric cars")
+
+EV_Subreddits
+
+#I will be selecting the top 6 most relevant subreddits with the highest subscriber count.
+
+EV_Subreddits_Top6 \<- c("technology","SelfDrivingCars","electricvehicles","teslamotors", "politics", "Economics") Top_6_subreddits \<- EV_Subreddits %\>% filter(subreddit %in% EV_Subreddits_Top6) %\>% select(subscribers,subreddit,title,description,date_utc)%\>% arrange(desc(subscribers))
+
+Top_6_subreddits
+
+#Now that we have a list of subreddits related to EVs, we can narrow down to specific subreddits that we are interested in and find the threads related to discussions involving the EV Tax Credit.
+
+#For this project, I will be selecting between 15–30 active threads, particularly ones that have at least 50 or more comments. Reddit_Tech_Thread \<- find_thread_urls(keywords="7500 ev tax credit, federal ev tax credit, ev credit", subreddit="technology", sort_by="new", period= "month")
+
+#View(Reddit_Tech_Thread)
+
+#After viewing the results, I found only 3 of them to be relevant to the topic and have a high amount of interaction through comments, so I extracted those out.
+
+Reddit_Tech_Thread \<- Reddit_Tech_Thread %\>% arrange(desc(comments))%\>% slice_head(n = 3)
+
+Reddit_SDC_Thread \<- find_thread_urls(keywords="7500 ev tax credit, federal ev tax credit, ev credit", subreddit="SelfDrivingCars", sort_by="hot", period= "all")
+
+#Once again, the top 3 most interacted threads seemed most relevant for further analysis. Reddit_SDC_Thread \<- Reddit_SDC_Thread %\>% group_by(date_utc)%\>% arrange(desc(comments))%\>% arrange(desc(date_utc))
+
+Reddit_ev_Thread \<- find_thread_urls(keywords="7500 ev tax credit, federal ev tax credit, ev credit", subreddit="electricvehicles", sort_by="hot", period= "month")
+
+#For the ev subreddit, I was able to find a few relevant threads, compared to Car and Technology subreddits. Reddit_ev_Thread \<- Reddit_ev_Thread %\>% arrange(desc(comments))%\>% slice(c(3,4,5,7,8,9))
+
+#I didn't find any relevant conversations happening about the tax credit after it ended, in this subreddit.
+
+Reddit_tesla_Thread \<- find_thread_urls(keywords="tax credit", subreddit = "teslamotors", sort_by = "hot", period = "all")
+
+#Didn't find any recent or relevant thread related to the tax credit.
+
+Reddit_eco_Thread \<- find_thread_urls(keywords="federal ev tax credit, ev credit", subreddit="Economics", sort_by="hot", period= "all")
+
+Reddit_poli_Thread \<- find_thread_urls(keywords = "federal ev tax credit, ev credit", subreddit ="politics", sort_by ="hot", period = "all")
+
+#Once again, no relevant results found.
+
+class(Reddit_Tech_Thread) class(Reddit_ev_Thread) length(Reddit_Tech_Thread) length(Reddit_ev_Thread) names(Reddit_Tech_Thread) names(Reddit_ev_Thread) #Just some sanity check...I want to make sure I am able to combine both data frames with ease.
+
+relevant_threads \<- rbind(Reddit_Tech_Thread,Reddit_ev_Thread) relevant_threads
+
+#Counting the total number of comments that we will be working with. sum(relevant_threads\$comments, na.rm = TRUE) #We have 1,228 comments to extract.
+
+#Now, I will create a loop to extract all of the comments. all_comments \<- list()
+
+for (i in 1:nrow(relevant_threads)) { url \<- relevant_threads$url[i]
+  thread <- get_thread_content(url)
+  all_comments[[i]] <- thread$comments } #Extracting data out of R to open and render the project in a new environment. saveRDS(all_comments, file = "all_comments.rds")
+
+```{r}
+#Packages used for this project:
+
+#install.packages("tidyverse")
+#install.packages("dplyr")
+#install.packages("purr")
+library(tidyverse)
+library(dplyr)
+library(quanteda)
+library(quanteda.textplots)
+library(tidytext)
+
+all_comments <- readRDS("all_comments.rds") #Load the dataset
+```
+
+Explanation: I used the RedditExtractor tool in R studio to find all relevant subreddits for my topic of interest, “EVs”. I came across 6 subreddits that had a high subscriber count ((in the hundreds of thousands)) and had the relevancy to my topic of interest.
+
+Digging deeper into analysis, I soon realized that only a few of my selected subreddits had relevant threads. My criteria for choosing a thred was to select a thread with high number of comments, which showcased active engagement towards the subject. I decided to remove any thread that had less than 50 comments.
+
+Out of the 6 subreddits, only “Technology”, and “ElectricVehicles” had relevant threads with recent engagement (right before or after October 31st, 2025; the end of the tax credit). This entailed that not everyone who had an EV cared enough to discuss the topic of the EV tax credit finishing. For instance, “teslamotors” and “SelfDrivingCars” subscribers did not show any interest in this topic, according to recent threads. As for the more broad subscriber base, such as “Politics” and “Economics”, both had topics related to other tax credits. For example, the “Politics” subreddit had topics related to other tax credits, such as “ACA Tax Credits” and “Obamacare Tax Credits”.
+
+[Data-Cleaning & Visualization 1:]{.underline}
+
+```{r DFM & Corpus Creation}
+#Lets first get an idea of the size and attributes of our extracted data.
+#bind_rows(all_comments)
+#head(all_comments)
+#tail(all_comments)
+
+
+class(all_comments)
+str(all_comments)
+#We need to convert our rds object into an actual data frame for further analysis.
+obj <- readRDS("all_comments.rds")
+class(obj)
+str(obj, max.level = 1)
+#Object converted into a data frame. 
+all_comments_df <- bind_rows(all_comments, .id = "thread_id")
+
+#Creating a corpus of all comments extracted. 
+#all_comments_df
+all_comments_corpus <- corpus(all_comments_df$comment)
+all_comments_csummary <- summary(all_comments_corpus)
+
+#Tokenizing 
+review_comments <-tokens(all_comments_corpus, remove_punct = TRUE)%>%
+                  tokens_select(pattern = stopwords("en"),
+                  selection = "remove")%>%
+                  dfm()
+#Word cloud to get a birds-eye view of common words in the corpus.            
+  textplot_wordcloud(review_comments)
+```
+
+After creating a DFM (Document-Feature Matrix), tokenzing and creating a corpus, I created a word cloud to see the relevant words being used across the 1,000 comments.
+
+The terms being used is what I expected, such as "ev", "\$", "tax" etc. Nothing is out of the ordinary. Though I may need to do more data cleaning, the word "just" seems to be extremely common across the corpus.
+
+[Visualization 2:]{.underline}
+
+```{r Better Wordcloud}
+#There are some words that I am finding unnecessary to include in the corpus. It's a list of more stop words, punctuation, and other words that may be important for topic modeling ("politics", "government","economics") but not for sentiment analysis.
+
+review_comments2 <- tokens(all_comments_corpus, remove_punct = TRUE
+                    , remove_symbols = TRUE, remove_numbers = TRUE,)%>%
+                    tokens_select(pattern=c(stopwords("en"),
+  "ev", "evs", "car", "cars", "vehicle", "vehicles", "tesla", "rivian", "hyundai", 
+  "ford", "model", "market", "sales", "battery", "charging", "gas", 
+  "production", "industry", "dealers", "dealer", "company", "companies",
+  
+  "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p",
+  "q", "r", "s", "t","u", "v", "w", "x", "y", "z",
+
+  "just", "like", "get", "got", "going", "think", "know", "want",
+  "really", "still", "now", "look", "even", "actually", "pretty",
+  "time", "years", "year", "months", "month", "one", "two", "first",
+  
+  "2025", "2026", "2024", "september", "october",
+
+  "tax", "credit", "subsidies", "price", "prices", "profit", 
+  "government", "policy","s", "gt"),selection = "remove") %>%
+  #change all uppercase letters to lowercase:
+  tokens_tolower()%>%
+  dfm()
+review_comments2
+topfeatures(review_comments2)
+textplot_wordcloud(review_comments2)
+
+#The word cloud is getting better but we need to make sure that unnecessary text is at a minimal before moving on to sentiment analysis. 
+library(quanteda.textstats)
+freq_top30 <- textstat_frequency(review_comments2, n = 30)
+freq_top30
+#Came across "re" and "gm", that need to be removed. 
+
+review_comments2 <- dfm_remove(review_comments2, pattern = c("re", "gm", "r2"))
+
+freq_top50 <- textstat_frequency(review_comments2, n = 50)
+freq_top50
+
+#After viewing the top 50 features, I am using common sense knowledge on what is truly needed in Sentiment analysis, and a little bit of ChatGPT (to quickly write out all of the unnecessary words for me), I created a custom filter of words that need to be removed in order for me to have effective words for analysis of sentiment, otherwise they will dilute the results in the models later on. 
+
+remove_words <- c(
+  # junk artifacts
+  "amp", "don", "yeah", "though", "next", "last", "around", "probably", "already",
+  
+  # topic-specific neutral words
+  "models", "auto", "electric", "musk", "money", 
+  "cost", "costs", "credits", "sell", "selling", "sold", "buy",
+  
+  # filler / function-like non-sentiment words
+  "us","can","also","much","see","make","need","right",
+  "way","well","many","sure","lot","go","big","less",
+  "enough","every","point","made"
+)
+
+review_comments2 <- dfm_remove(review_comments2, pattern = remove_words)
+
+#Now lets see what we are left with:
+freq_top50 <- textstat_frequency(review_comments2, n = 50)
+freq_top50
+
+#I'm still seeing too many You still have too many: neutral factual words, topic words, filler words, verbs, and temporal markers. Here is a new updated "remove_words" list. 
+remove_words <- c(
+  # junk artifacts
+  "amp", "don", "yeah", "though", "next", "last", "around", "probably", "already",
+  #reddit artifacts
+  "doesn", "say", "per", "isn",
+  
+  # topic-specific neutral words
+  "models", "auto", "electric", "musk", "money", 
+  "cost", "costs", "credits", "sell", "selling", "sold", "buy","elon","trump","honda","china","ice",
+  
+  # filler / function-like non-sentiment words
+  "us","can","also","much","see","make","need","right",
+  "way","well","many","sure","lot","go","big","less",
+  "enough","every","point","made", "people","new","used","back","making","future",
+  "end","everyone",
+  "quarter","take","thing","anything","numbers","buying","high","billion",
+  "things","long","seems","current","little","yet","world","manufacturers",
+  "charge","since","makes","use","state","power","work",
+  #optional remove but I think will make the sentiment analysis stronger:
+  "said","might","ever","means","far","getting","fact","true","another",
+  "almost","someone","talking","something","home","maybe","put","reason",
+  "solar","lease","chargers","oil","range","federal"
+)
+
+review_comments2 <- dfm_remove(review_comments2, remove_words)
+
+#Lets check our top words:
+freq_top50 <- textstat_frequency(review_comments2, n = 50)
+freq_top50
+```
+
+Initial Findings:
+
+I initially created a wordcloud with minimal cleaning steps and noticed that I would need to do major cleaning in order to prepare my corpus for sentiment analysis. There were many 2 letter words, symbols, and other unnecessary words that would negatively contribute in the dictionary based models that I planned on using later in the project. I followed the traditional rules of cleaning the data (TLRS) in order to get it at a good standing in terms of cleanliness. After that, I did a "top 50 most used" word list and worked my way through reducing the clutter by removing certain words out, which ended up being quite time consuming.
+
+I now have a clean DFM that I can use to analyse through multiple dictionary based models.
+
+#### [Data Analysis]{.underline}
+
+I will be using a dictionary-based approach and utilizing 3 popular lexicons to measure sentiment of my corpus. It's important to measure across different lexicons to make sure that we are able to capture the different nuances of our results. I will be using BING LIU, AFINN, and NRC to do my analysis.
+
+AFINN: Measures based on weighted numeric scores to words, capturing positive and negative sentiment. (Example: A positive word in its lexicon would receive a +5 score, while a negative would receive a -5 score).
+
+Bing Liu: Measures based on binary scores; positive words receive a +1 and negative words receive a -1.
+
+NRC: Measures based on a categorical assignment approach, making it less powerful for sentiment but better for emotional tone.
+
+```{r Dictionary Analysis, BING}
+
+#I will be selecting 3 lexicons for my corpus analysis.
+
+#First, I need to convert my dfm back to tidytext. 
+
+tidy_tokens <- tidy(review_comments2)   # dfm → term-level table
+# columns: document, term, count
+
+#1. Bing Lui Lexicon:
+
+bing <- get_sentiments("bing") #Load the Bing Lui Lexicon:
+
+Bing <- tidy_tokens %>% #	Match each token in the data to the Bing sentiment lexicon.
+inner_join(bing, by = c("term" = "word")) %>%
+dplyr::count(document, sentiment, wt = count) %>%#Group by each document and sentiment class.
+tidyr::pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%#Converts table from long to wide format.
+mutate(net_bing = positive - negative) #creates a net sentiment score for each document:
+```
+
+```{r Dictionary Analysis, AFINN}
+
+afinn <- get_sentiments("afinn") #Load the AFINN Lexicon:
+
+AFINN <- tidy_tokens %>%
+  inner_join(afinn, by = c("term" = "word")) %>% #	Match each token in the data to the AFINN sentiment lexicon.
+  group_by(document) %>%
+  summarise(net_afinn = sum(value * count))
+```
+
+```{r Dictionary Analysis, NRC}
+nrc <- get_sentiments("nrc")  #Load the NRC Lexicon:
+
+NRC <- tidy_tokens %>%#	Match each token in the data to the NRC sentiment lexicon.
+  inner_join(nrc, by = c("term" = "word")) %>%
+  filter(sentiment %in% c("positive","negative")) %>%
+  count(document, sentiment, wt = count) %>%
+  tidyr::pivot_wider(names_from = sentiment, values_from = n, values_fill = 0) %>%
+  mutate(net_nrc = positive - negative)
+```
+
+[Visualization 3:]{.underline}
+
+```{r Visualize Lexicons}
+library(ggplot2)
+library(tidyr)
+
+#Now that we have ran our corpus through all 3 lexicons, lets visualize our results.
+# First, lets combine all the lexicons results together.
+
+sentiment_compare <- Bing %>%
+  select(document,net_bing)%>%
+  left_join(AFINN, by = "document") %>%
+  left_join(NRC %>% select(document,net_nrc), by = "document")
+
+#Check
+glimpse(sentiment_compare)
+summary(sentiment_compare)
+
+#Lets use boxplots to see how the 3 results correlate. 
+sent_long <- sentiment_compare %>%
+  pivot_longer(cols = starts_with("net_"),
+               names_to = "lexicon",
+               values_to = "score")
+
+ggplot(sent_long, aes(x = lexicon, y = score, fill = lexicon)) +
+  geom_boxplot(alpha = 0.7, outlier.alpha = 0.3) +
+  theme_minimal() +
+  labs(
+    title = "Sentiment Score Distribution by Lexicon",
+    x = "Lexicon",
+    y = "Sentiment score"
+  )
+
+#Scatterplot
+ggplot(sent_long, aes(x = score, fill = lexicon)) +
+  geom_density(alpha = 0.4) +
+  facet_wrap(~ lexicon, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Density of Sentiment Scores by Lexicon",
+    x = "Sentiment score",
+    y = "Density"
+  )
+#summary
+summary(sentiment_compare[, c("net_bing", "net_afinn", "net_nrc")])
+
+```
+
+#### [**Discussion and Conclusion:**]{.underline}
+
+Findings after analysis: I decided to use 3 popular dictionaries to conduct my sentiment analysis (BING, AFINN, NRC). I ran my corpus data through each lexcion and found very interesting results:
+
+Box Plot Summary:
+
+From my interpretation, sentiment across all lexicons shows a slightly negative response to the EV tax credit ending. AFINN has the most broad range of negative scores, showcasing its selection of picking up extreme negatives and positives, as its score system is designed to do so. For Bing, it has a less aggressive, neutral to slightly negative score, since its scoring system is binary, unlike AFINN. NRC may have produced the least interesting results with a narrow distribution, since its design is best suited for emotion classification rather than sentiment polarity. The results here highlight the importance of using different dictionaries to understand a nuanced dataset of sentiment.
+
+Density Plot Summary:
+
+The trend continues with all 3 lexicons leaning towards a slight negative sentiment, as the hypothesis suggested. AFINN shows the broadest range of negative scores, which it's designed to pick up on, due to the extreme negative comments typical of Reddit. Bing is much narrower, showing how binary scoring is much less aggressive on adding up positive or negative sentiment. NRC would be the most conservative of the two, showing minimal range of polarity. It is safe to conclude that AFINN provides the most sensitive measure of this dataset.
+
+[**Conclusion:**]{.underline}
+
+The purpose of the project was to examine public sentiment analysis toward the Federal EV Tax Credit ending on October 31, 2025. Using R and the RedditExtractor tool, we were able to extract comments from 2 different and popular subreddits that were discussing the topic. We used 3 powerful lexicons in our dictionary based approach, showing us a slightly negatively skewed trend in our findings. AFINN had the most extreme score system, showing us its sensitivity to positive and negative words that are common in Reddit comments. Bing Liu's binary approach was more stable and conservative in its sentiment measuring, deeming it the lexicon with most polarity across all comments.
+
+Finally, NRC's classification method, though insightful, was not as useful for us for this project's needs. Regardless, it was interesting to see how it would stack up against the other 2 lexicons. We can safely conclude that thought the comments were generally neutral, the slight negative skewness entailed that the sentiment did turn somewhat negative from the news of the EV tax credit ending.
+
+[**Improvement/Future Research Directions:**]{.underline}
+
+1.  A regression analysis could be added on to really showcase certain trends in popular negative/positive words and other covariates.
+2.  Examine the texts classified as most positive and most negative to assess whether the classifications make substantive sense.
+3.  The reported sentiment scores are based on net sentiment (positive minus negative word counts), which may be influenced by comment length. A normalized sentiment measure—scaled between −1 and 1—would reduce this effect by accounting for the total number of sentiment-bearing words. Future extensions of this analysis could apply normalized sentiment to improve comparability across comments of varying lengths.
